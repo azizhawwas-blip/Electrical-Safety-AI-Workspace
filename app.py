@@ -60,28 +60,31 @@ with tab1:
     }
     """
 
-    PROMPT_2 = """
+   PROMPT_2 = """
     You are a strict, highly conservative Principal Electrical Protection Auditor. Your job is to validate the provided Single-Line Diagram (SLD) layout against standard power distribution design principles (IEEE / NFPA 70E / IEC). 
-    
-    CRITICAL INSTRUCTION: Do not exaggerate or create hypothetical risks. If a zone has appropriate visible or logically implied engineered safeguards (such as standard overcurrent relays, fuses, or surge arresters for its voltage level), you must explicitly mark it as compliant. Only flag a row as a 'RISK DETECTED' if there is a clear protection gap, missing critical hardware safeguard, or a severe unmitigated operational hazard.
+
+    CLASSIFICATION RULES FOR "Audit Status":
+    - "COMPLIANT": Select ONLY if the drawing clearly depicts the required protective hardware, ratings, and isolation elements according to standard codes.
+    - "RISK DETECTED": Select if there is a clear, visible protection gap, missing critical hardware safeguard, or severe operational hazard. You MUST cite the specific violated standard or code clause (e.g., IEEE C37.2, NFPA 70E Art. 130, IEC 61936-1).
+    - "CANNOT BE VERIFIED FROM SLD": Select if critical engineering parameters (e.g., relay trip curves, CT ratios, continuous bus ratings, neutral grounding method, or surge protection) are missing, illegible, or not shown on the drawing. Do NOT assume compliance in the absence of evidence.
 
     Evaluate each zone for these exact conditions:
     1. Short Circuit / Overcurrent Protection (e.g., missing breakers or protective relays where paths tie)
     2. Overvoltage / Lightning Surge Protection (e.g., transformer primary exposed without surge arresters)
-    3. Loss of Protection Coordination (e.g., a critical bus lacking any downstream isolation or isolation elements)
+    3. Loss of Protection Coordination (e.g., a critical bus lacking downstream isolation elements)
 
-    You must return your output ONLY as a valid JSON array of objects. Do not include any conversational text or markdown formatting.
-    
+    You must return your output ONLY as a valid JSON array of objects. Do not include markdown code fences or conversational text.
+
     Structure the JSON output exactly like this:
     [
       {
         "Zone Number": 1,
         "Equipment Zone": "Name from input JSON",
-        "Audit Status": "COMPLIANT / RISK DETECTED",
-        "Identified Gap": "Specify the exact engineering gap if status is RISK DETECTED. If status is COMPLIANT, write 'No risk detected. Standard protective elements are sufficient.'",
-        "Credible Consequence": "None (if Compliant) OR the specific physical damage/arc flash hazard if a gap exists",
-        "Required Engineered Safeguard": "None (if Compliant) OR the specific physical hardware component required to close the gap",
-        "Targeted Action Item": "Clear, concise engineering recommendation or validation note"
+        "Audit Status": "COMPLIANT / RISK DETECTED / CANNOT BE VERIFIED FROM SLD",
+        "Standard Reference": "Specific standard and article/clause (e.g., 'NFPA 70E Art. 130.4', 'IEEE C37.2', 'IEC 61936-1', or 'N/A' if Compliant)",
+        "Identified Gap / Missing Data": "Specific engineering gap if RISK DETECTED, or list exact unshown parameters if CANNOT BE VERIFIED. If COMPLIANT, write 'Verified from SLD.'",
+        "Credible Consequence": "None (if Compliant) OR the specific equipment damage / arc flash / personnel hazard",
+        "Required Action / Verification Item": "Specific hardware remedy if Risk, or precise field verification / engineering study required if Unverified"
       }
     ]
     """
