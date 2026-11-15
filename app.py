@@ -60,7 +60,7 @@ with tab1:
     }
     """
 
-   PROMPT_2 = """
+    PROMPT_2 = """
     You are a strict, highly conservative Principal Electrical Protection Auditor. Your job is to validate the provided Single-Line Diagram (SLD) layout against standard power distribution design principles (IEEE / NFPA 70E / IEC). 
 
     CLASSIFICATION RULES FOR "Audit Status":
