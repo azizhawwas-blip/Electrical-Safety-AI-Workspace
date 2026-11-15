@@ -15,13 +15,69 @@ st.write("Leverage advanced multi-modal AI to parse Single-Line Diagrams (SLDs),
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except KeyError:
-    st.error("🔑 API Key missing! Please add GEMINI_API_KEY to your local `.streamlit/secrets.toml` file.")
+    st.error("🔑 API Key missing! Please add GEMINI_API_KEY to your local `.streamlit/secrets.toml` file or Streamlit Cloud Secrets.")
     st.stop()
 
 # Initialize clean GenAI client
 client = genai.Client(api_key=api_key)
 
-# --- 2. Define App Tabs Layout ---
+# --- 2. Strict Compliance Engineering Prompts (Top-Level Definition) ---
+PROMPT_1 = """
+You are an expert Principal Electrical Safety Engineer and Substation Design Specialist. Analyze this Electrical Single-Line Diagram (SLD) or Substation layout and divide it into logical zones/nodes.
+Follow these rules for node separation:
+1. Divide nodes based on distinct voltage levels (e.g., High Voltage incoming, Medium Voltage distribution, Low Voltage auxiliary).
+2. Create new nodes at major equipment boundaries (e.g., Transformer primary side vs. secondary side; Switchgear busbars).
+3. Identify critical protection zones bounded by Circuit Breakers, Fuses, and Protective Relays (e.g., 50/51 overcurrent, 87 differential, 51N ground fault).
+
+You must return your output ONLY as a valid JSON object. Do not include any conversational text or markdown blocks (like ```json).
+Structure:
+{
+  "study_metadata": {"substation_name": "Extracted Substation/Facility Name from SLD"},
+  "nodes": [
+    {
+      "node_number": 1,
+      "node_name": "Descriptive Bus/Equipment Tag (e.g., 13.8kV Switchgear Bus A)",
+      "design_intent": "Purpose of this electrical segment or power path",
+      "electrical_specs": {
+        "voltage_level": "e.g., 13.8 kV / 480 V",
+        "rated_current": "Visible bus continuous current rating (Amps) or Estimated rating",
+        "grounding_system": "Solidly Grounded / Resistance Grounded / Ungrounded"
+      }
+    }
+  ]
+}
+"""
+
+PROMPT_2 = """
+You are a strict, highly conservative Principal Electrical Protection Auditor. Your job is to validate the provided Single-Line Diagram (SLD) layout against standard power distribution design principles (IEEE / NFPA 70E / IEC).
+
+CLASSIFICATION RULES FOR "Audit Status":
+- "COMPLIANT": Select ONLY if the drawing clearly depicts the required protective hardware, ratings, and isolation elements according to standard codes.
+- "RISK DETECTED": Select if there is a clear, visible protection gap, missing critical hardware safeguard, or severe operational hazard. You MUST cite the specific violated standard or code clause (e.g., IEEE C37.2, NFPA 70E Art. 130, IEC 61936-1).
+- "CANNOT BE VERIFIED FROM SLD": Select if critical engineering parameters (e.g., relay trip curves, CT ratios, continuous bus ratings, neutral grounding method, or surge protection) are missing, illegible, or not shown on the drawing. Do NOT assume compliance in the absence of evidence.
+
+Evaluate each zone for these exact conditions:
+1. Short Circuit / Overcurrent Protection (e.g., missing breakers or protective relays where paths tie)
+2. Overvoltage / Lightning Surge Protection (e.g., transformer primary exposed without surge arresters)
+3. Loss of Protection Coordination (e.g., a critical bus lacking downstream isolation elements)
+
+You must return your output ONLY as a valid JSON array of objects. Do not include markdown code fences or conversational text.
+
+Structure the JSON output exactly like this:
+[
+  {
+    "Zone Number": 1,
+    "Equipment Zone": "Name from input JSON",
+    "Audit Status": "COMPLIANT / RISK DETECTED / CANNOT BE VERIFIED FROM SLD",
+    "Standard Reference": "Specific standard and article/clause (e.g., 'NFPA 70E Art. 130.4', 'IEEE C37.2', 'IEC 61936-1', or 'N/A' if Compliant)",
+    "Identified Gap / Missing Data": "Specific engineering gap if RISK DETECTED, or list exact unshown parameters if CANNOT BE VERIFIED. If COMPLIANT, write 'Verified from SLD.'",
+    "Credible Consequence": "None (if Compliant) OR the specific equipment damage / arc flash / personnel hazard",
+    "Required Action / Verification Item": "Specific hardware remedy if Risk, or precise field verification / engineering study required if Unverified"
+  }
+]
+"""
+
+# --- 3. Define App Tabs Layout ---
 tab1, tab2 = st.tabs(["🚀 Automated Substation Compliance Audit", "💬 Electrical Code Copilot"])
 
 # =========================================================================
@@ -29,65 +85,9 @@ tab1, tab2 = st.tabs(["🚀 Automated Substation Compliance Audit", "💬 Electr
 # =========================================================================
 with tab1:
     st.header("SLD Safety & Validation Automation")
-    st.write("Upload an Electrical Single-Line Diagram (SLD) to perform a strict Pass/Fail validation audit against standard protection rules.")
+    st.write("Upload an Electrical Single-Line Diagram (SLD) to perform a strict compliance audit against standard protection rules.")
 
     uploaded_file = st.file_uploader("Upload Single-Line Diagram (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"], key="sld_uploader")
-
-    # Strict Compliance Engineering prompts inside the automation logic
-    PROMPT_1 = """
-    You are an expert Principal Electrical Safety Engineer and Substation Design Specialist. Analyze this Electrical Single-Line Diagram (SLD) or Substation layout and divide it into logical zones/nodes.
-    Follow these rules for node separation:
-    1. Divide nodes based on distinct voltage levels (e.g., High Voltage incoming, Medium Voltage distribution, Low Voltage auxiliary).
-    2. Create new nodes at major equipment boundaries (e.g., Transformer primary side vs. secondary side; Switchgear busbars).
-    3. Identify critical protection zones bounded by Circuit Breakers, Fuses, and Protective Relays (e.g., 50/51 overcurrent, 87 differential, 51N ground fault).
-
-    You must return your output ONLY as a valid JSON object. Do not include any conversational text or markdown blocks (like ```json).
-    Structure:
-    {
-      "study_metadata": {"substation_name": "Extracted Substation/Facility Name from SLD"},
-      "nodes": [
-        {
-          "node_number": 1,
-          "node_name": "Descriptive Bus/Equipment Tag (e.g., 13.8kV Switchgear Bus A)",
-          "design_intent": "Purpose of this electrical segment or power path",
-          "electrical_specs": {
-            "voltage_level": "e.g., 13.8 kV / 480 V",
-            "rated_current": "Visible bus continuous current rating (Amps) or Estimated rating",
-            "grounding_system": "Solidly Grounded / Resistance Grounded / Ungrounded"
-          }
-        }
-      ]
-    }
-    """
-
-    PROMPT_2 = """
-    You are a strict, highly conservative Principal Electrical Protection Auditor. Your job is to validate the provided Single-Line Diagram (SLD) layout against standard power distribution design principles (IEEE / NFPA 70E / IEC). 
-
-    CLASSIFICATION RULES FOR "Audit Status":
-    - "COMPLIANT": Select ONLY if the drawing clearly depicts the required protective hardware, ratings, and isolation elements according to standard codes.
-    - "RISK DETECTED": Select if there is a clear, visible protection gap, missing critical hardware safeguard, or severe operational hazard. You MUST cite the specific violated standard or code clause (e.g., IEEE C37.2, NFPA 70E Art. 130, IEC 61936-1).
-    - "CANNOT BE VERIFIED FROM SLD": Select if critical engineering parameters (e.g., relay trip curves, CT ratios, continuous bus ratings, neutral grounding method, or surge protection) are missing, illegible, or not shown on the drawing. Do NOT assume compliance in the absence of evidence.
-
-    Evaluate each zone for these exact conditions:
-    1. Short Circuit / Overcurrent Protection (e.g., missing breakers or protective relays where paths tie)
-    2. Overvoltage / Lightning Surge Protection (e.g., transformer primary exposed without surge arresters)
-    3. Loss of Protection Coordination (e.g., a critical bus lacking downstream isolation elements)
-
-    You must return your output ONLY as a valid JSON array of objects. Do not include markdown code fences or conversational text.
-
-    Structure the JSON output exactly like this:
-    [
-      {
-        "Zone Number": 1,
-        "Equipment Zone": "Name from input JSON",
-        "Audit Status": "COMPLIANT / RISK DETECTED / CANNOT BE VERIFIED FROM SLD",
-        "Standard Reference": "Specific standard and article/clause (e.g., 'NFPA 70E Art. 130.4', 'IEEE C37.2', 'IEC 61936-1', or 'N/A' if Compliant)",
-        "Identified Gap / Missing Data": "Specific engineering gap if RISK DETECTED, or list exact unshown parameters if CANNOT BE VERIFIED. If COMPLIANT, write 'Verified from SLD.'",
-        "Credible Consequence": "None (if Compliant) OR the specific equipment damage / arc flash / personnel hazard",
-        "Required Action / Verification Item": "Specific hardware remedy if Risk, or precise field verification / engineering study required if Unverified"
-      }
-    ]
-    """
 
     if uploaded_file:
         # Prevent old test data bleed if user shifts drawings mid-session
@@ -100,10 +100,10 @@ with tab1:
             try:
                 image_bytes = uploaded_file.read()
                 pil_image = Image.open(io.BytesIO(image_bytes))
-                
+
                 with st.status("Processing Electrical Validation Pipeline...", expanded=True) as status:
                     status.update(label="🔍 Analyzing SLD layout and zoning voltage paths...", state="running")
-                    
+
                     try:
                         response_1 = client.models.generate_content(
                             model='gemini-2.5-flash',
@@ -120,9 +120,9 @@ with tab1:
 
                     raw_json_1 = response_1.text.replace("```json", "").replace("```", "").strip()
                     hidden_nodes_data = json.loads(raw_json_1)
-                    
+
                     status.update(label="🛡️ Verification in progress: Auditing circuit elements against codes...", state="running")
-                    
+
                     try:
                         response_2 = client.models.generate_content(
                             model='gemini-2.5-flash',
@@ -139,7 +139,7 @@ with tab1:
 
                     raw_json_2 = response_2.text.replace("```json", "").replace("```", "").strip()
                     final_hazop_rows = json.loads(raw_json_2)
-                    
+
                     status.update(label="🎉 Compliance check complete! Rendering data worksheet...", state="complete")
 
                 st.session_state["final_df"] = pd.DataFrame(final_hazop_rows)
@@ -154,14 +154,14 @@ with tab1:
         if "final_df" in st.session_state:
             df = st.session_state["final_df"]
             st.success("📝 Validation Matrix Compiled Successfully!")
-            
+
             st.subheader("Preview Substation Compliance Report")
             st.dataframe(df)
-            
+
             excel_buffer = io.BytesIO()
             df.to_excel(excel_buffer, index=False, engine='openpyxl')
             excel_buffer.seek(0)
-            
+
             st.download_button(
                 label="📥 Download Excel Validation Audit Sheet",
                 data=excel_buffer,
@@ -197,17 +197,14 @@ with tab2:
         # Submit request directly down to live engine stream pipeline
         try:
             with st.spinner("Analyzing electrical context..."):
-                # System configuration injected into the baseline interaction text block
                 system_context = "You are a professional, highly analytical Principal Electrical Safety Engineer and power distribution expert. Provide expert technical guidance based on IEEE, NFPA 70E, NEC, and IEC standards."
-                
+
                 try:
-                    # Attempt standard Flash model first
                     chat_response = client.models.generate_content(
                         model='gemini-2.5-flash',
                         contents=[f"System Context: {system_context}\n\nUser Query: {user_query}"]
                     )
                 except Exception as e:
-                    # Fallback to high-availability Flash-Lite model if 503 server overload occurs
                     if "503" in str(e) or "UNAVAILABLE" in str(e):
                         chat_response = client.models.generate_content(
                             model='gemini-2.5-flash-lite',
@@ -215,13 +212,13 @@ with tab2:
                         )
                     else:
                         raise e
-                
+
                 assistant_reply = chat_response.text
-                
+
             # Display response output elements
             with st.chat_message("assistant"):
                 st.write(assistant_reply)
             st.session_state["chat_history"].append({"role": "assistant", "content": assistant_reply})
-            
+
         except Exception as e:
             st.error(f"Chat connection encountered an issue: {str(e)}")
